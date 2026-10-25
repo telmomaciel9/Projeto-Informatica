@@ -1,10 +1,96 @@
-<div style="float:left;margin:0 10px 0px 0">
-    <img width="50" src="./docs/src/images/EEUM_logo_EN.jpg"> 
-</div>
+<img width="60" src="./docs/src/images/EEUM_logo_EN.jpg" alt="School of Engineering, University of Minho" align="left" />
 
-# PI24 - Real-Time Speech Synthesis
+# Real-Time Speech Synthesis (PI24)
 
-**Authors:**
+Low-latency **text-to-speech** system for Portuguese and English, built as the Master's capstone project ("Projeto de Informática") at the University of Minho, in partnership with **Agentifai**. It turns natural text into speech and returns it either as a file or as a real-time audio stream.
+
+📖 **Full documentation:** [ddu72.github.io/PI24](https://ddu72.github.io/PI24/)
+
+<br clear="left" />
+
+## How it works
+
+![Basic flow](./docs/src/images/BasicFlow.png)
+
+1. **Input**: the user sends natural text.
+2. **Normalisation**: abbreviations, numbers, dates and punctuation are expanded into words that can be spoken, using language-specific rules.
+3. **Phonemisation**: the normalised text is converted into a phonetic representation.
+4. **Synthesis**: a **Coqui XTTS v2** model, fine-tuned for Portuguese, generates the audio. The voice is cloned from a short reference sample, so different voices can be used.
+5. **Output**: audio is streamed back in real time or saved to a file.
+
+## Architecture
+
+The system is a set of Python microservices that talk to each other over **gRPC**, each running in its own Docker container.
+
+![Architecture](./docs/src/images/architecture.png)
+
+| Service | Role |
+|---|---|
+| `app_client` | Terminal client that sends text and receives the audio |
+| `app` + `app_api` | React web interface and the Flask REST API behind it |
+| `app_proxy` | Receives requests and balances them across the synthesis servers |
+| `app_server` | Runs the TTS model (three replicas in Docker Compose) |
+| `app_normalizer` | Text normalisation service |
+
+Black arrows in the diagram show text; blue arrows show audio.
+
+## Tech stack
+
+Python 3.12 · gRPC / Protocol Buffers · Coqui TTS (XTTS v2) · Flask · React · Docker / Docker Compose
+
+## Getting started
+
+### Option 1: standalone (single process)
+
+```bash
+pip install -r enviroments/server_requirements.txt
+python intlex.py "Olá, mundo!" config/intlex_config.json --output out.wav --lang pt
+```
+
+| Argument | Description |
+|---|---|
+| `TEXT` | Text to synthesise |
+| `CONFIG` | Configuration file (model, voices, normalisation rules) |
+| `--output` | Output file (optional) |
+| `--lang` | `pt` or `en` (optional) |
+
+### Option 2: microservices with Docker
+
+```bash
+docker compose build
+docker compose up proxy -d          # starts the proxy, synthesis servers and normaliser
+docker compose run client           # opens the terminal client
+```
+
+Stop everything with `docker compose down`.
+
+> The fine-tuned model weights are not stored in this repository. Set their location in `config/intlex_config.json` (`checkpoint_path`, `vocab_path`, `xtts_config`). The training scripts and notebook are in `model/`.
+
+## Repository structure
+
+```
+app/              React web interface
+app_api/          Flask REST API (/api/tts)
+app_client/       Terminal client
+app_proxy/        Load-balancing proxy
+app_server/       Synthesis server
+app_normalizer/   Text normalisation (numbers, dates, abbreviations, punctuation)
+grpcs/            .proto definitions and generated stubs
+config/           Model, proxy and normalisation configuration
+model/            XTTS fine-tuning scripts and notebook
+docker/           One Dockerfile per service
+docs/             Documentation site
+```
+
+## Roadmap
+
+- Automated tests
+- SSML input support (parser started in `ssml_parser/`)
+- Voice selection in the client
+- Log files for each service
+- Fix the web interface connection when running in Docker
+
+## Team
 
 - [Beatriz Monteiro](https://github.com/5ditto)
 - [Daniel Du](https://github.com/ddu72)
@@ -13,150 +99,4 @@
 - [Moisés Antunes](https://github.com/MoisesA14)
 - [Telmo Maciel](https://github.com/telmomaciel9)
 
-## A better version of the Documentation can be found [here](https://ddu72.github.io/PI24/)
-
-## Description
-
-This project aims to create a text-to-speech system that can be used in real-time. The system is divided into three main components: the client, the proxy, and the server. The client is responsible for sending the text to be synthesized to the proxy. The proxy is responsible for redirecting the requests to the available servers. The server is responsible for normalizing the text, synthesizing it and sending the audio back to the client.
-The project was proposed by the company Agentifai and was being developed by a group of students from the University of Minho.
-
-## Basic App Flow
-
-![Basic App Flow](./docs/src/images/BasicFlow.png)
-
-The Text-to-Speech (TTS) system follows a modular pipeline to convert input text or Speech Synthesis Markup Language (SSML) into audio files or real-time streams. Below is a description of the key components and their roles in the process:
-
-1. User Input or SSML File:
-
-   Users can provide natural text or structured SSML files. However, due to limitations in supporting SSML files, this functionality has not been implemented. Currently, the system only processes natural text inputs.
-
-2. SSML Parser:
-
-   (Not implemented) This component was intended to extract relevant text data from SSML files and prepare it for further processing.
-
-3. Normalizer:
-
-   The normalizer standardizes the input text (e.g., expanding abbreviations, handling numbers) to ensure it is ready for phonemization.
-
-4. Phonemizer:
-
-   The phonemizer converts normalized text into phonetic representations, enabling accurate pronunciation during synthesis. This component is also subject to training and evaluation cycles to improve accuracy and performance.
-
-5. TTS Model:
-
-   The text's phonetic representation is passed to the TTS model, which generates audio output. The model has been optimized for both file-based outputs and real-time streaming scenarios.
-
-6. Audio Output:
-
-   The generated audio can be delivered as a downloadable file or streamed directly, depending on user requirements.
-
-The system's modular architecture ensures flexibility, enabling enhancements to individual components without disrupting the entire workflow. While SSML support was initially planned, the current implementation focuses solely on natural text processing.
-
-## Components
-
-### Client
-
-The client is a simple TUI program that sends the text to be synthesized to the proxy. It is implemented in Python.
-
-### Proxy
-
-The proxy receives the text to be synthesized from the client and redirects it to the available servers. It is implemented in Python.
-
-### Server
-
-The server receives the text to be synthesized from the proxy, sends it to be normalized, receives the normalized text, synthesizes it and sends the audio back to the client. It is implemented in Python.
-
-### Normalizer
-
-The normalizer receives the text to be synthesized from the server, normalizes it and sends it back to the server. It is implemented in Python.
-
-### API & Frontend
-
-The API is responsible for receiving the text to be synthesized and returning the audio. The frontend is a simple web interface that allows the user to interact with the API.
-
-## Architecture
-
-The system was implemented using a microservices architecture. Each component is a separate service that communicates with the others using gRPCs. Each component is implemented in Python and is dockerized.
-
-![Architecture](./docs/src/images/architecture.png)
-
-The black arrows represent the flow of the text to be synthesized. The blue arrows represent the flow of the audio.
-
-## Requirements
-
-- Python 3.12
-- Docker
-- Docker Compose
-
-## Installation
-
-### Standalone Program
-
-This allows the user to synthesize text using the Intelex Module. This version is a standalone (Single Service) version of the implementation.
-
-#### Steps
-
-1. Install the requirements: `pip install -r enviroments/server_requirements.txt`
-2. Run the program: `python intlex.py [TEXT] [CONFIG] --output [OUTPUT] --lang [LANG] --kwargs [KWARGS]`
-3. The output will be saved in the output file if provided, otherwise it will be stored in the default output file.
-
-##### Arguments
-
-- `TEXT`: Text to be synthesized
-- `CONFIG`: Configuration file
-- `OUTPUT`: Output file (optional)
-- `LANG`: Language [pt, en] (optional)
-- `KWARGS`: Additional arguments (optional)
-
-### Docker
-
-This allows the user to synthesize text using the Intelex Program. This version is a dockerized version of the implementation. It uses a microservices architecture.
-
-#### Steps
-
-1. Build the docker images:
-
-   `docker compose build`
-
-2. Initialize proxy and required services:
-
-   `docker compose up proxy -d`
-
-3. Initialize the client:
-
-   `docker compose run -e PROXY_SERVER_PORT={PROXY_SERVER_PORT} -e PROXY_SERVER_ADDRESS={PROXY_SERVER_ADDRESS} client`
-
-4. The output will be displayed in the terminal.
-
-- To stop the services:
-  `docker compose down`
-
-## Improvements
-
-##### General
-
-- [TODO] Tests
-- [TODO] Documentation
-- [TODO] More languages
-
-##### Client
-
-- [TODO] Voice option in client
-- [TODO] Better user interface
-
-##### Proxy
-
-- [FIX] Prints in proxy
-- [TODO] Logfile
-
-##### Server
-
-- [TODO] Logfile
-
-##### Normalizer
-
-- [TODO] Logfile
-
-##### API & Frontend
-
-- [FIX] Not connecting using Docker
+Project proposed by Agentifai · University of Minho, 2024/25.
